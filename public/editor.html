@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Preview Editor</title>
+  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet"/>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #gjs { height: calc(100vh - 52px); border-top: 1px solid #eee; }
+    .topbar {
+      height: 52px; display: flex; align-items: center; gap: 12px;
+      padding: 0 16px; border-bottom: 1px solid #eee; font-family: system-ui, sans-serif;
+    }
+    .btn { padding: 8px 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+    .btn.primary { background: #111; color: #fff; border-color: #111; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <strong>Live Editor</strong>
+    <span id="status" style="opacity:.7">Ready</span>
+    <button id="saveBtn" class="btn primary">Save</button>
+    <button id="exportBtn" class="btn">Export to Console</button>
+  </div>
+
+  <div id="gjs"></div>
+
+  <script src="https://unpkg.com/grapesjs"></script>
+  <script src="https://unpkg.com/grapesjs-blocks-basic"></script>
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const previewId = qs.get('preview_id');
+    if (!previewId) alert('Missing preview_id in URL');
+
+    const editor = grapesjs.init({
+      container: '#gjs',
+      height: '100%',
+      storageManager: false,
+      fromElement: false,
+      plugins: ['gjs-blocks-basic'],
+      pluginsOpts: { 'gjs-blocks-basic': {} }
+    });
+
+    // Load last saved code
+    fetch(`/api/export?preview_id=${encodeURIComponent(previewId)}`, {
+      headers: { 'x-api-key': 'browser-no-key' }
+    })
+    .then(r => r.json())
+    .then(({ html, css }) => {
+      if (html) editor.setComponents(html);
+      if (css) editor.setStyle(css);
+    });
+
+    document.getElementById('saveBtn').onclick = async () => {
+      const html = editor.getHtml();
+      const css = editor.getCss();
+      setStatus('Saving...');
+      const r = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview_id: previewId, html, css })
+      });
+      if (r.ok) setStatus('Saved ✓'); else setStatus('Save failed');
+    };
+
+    document.getElementById('exportBtn').onclick = () => {
+      console.log('--- HTML ---\n', editor.getHtml());
+      console.log('--- CSS ---\n', editor.getCss());
+      alert('Open the console to copy exported HTML & CSS.');
+    };
+
+    function setStatus(s){ document.getElementById('status').textContent = s; }
+  </script>
+</body>
+</html>
